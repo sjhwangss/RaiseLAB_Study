@@ -70,7 +70,7 @@ def test_with_fgsm(model, test_loader, epsilon):
         loss = criterion(outputs, labels)
         total_loss += loss.item()
 
-        # Backward pass to 계산 그래디언트
+        # Backward pass
         model.zero_grad()
         loss.backward()
 
@@ -91,10 +91,8 @@ def test_with_fgsm(model, test_loader, epsilon):
 
 
 # 원본과 적대적 이미지 시각화
-def visualize_attack(model, test_loader, epsilon):
+def visualize_attack(model, images, labels, epsilon):
     model.eval()
-    data_iter = iter(test_loader)
-    images, labels = next(data_iter)
     images, labels = images.to(device), labels.to(device)
     images.requires_grad = True
 
@@ -111,8 +109,7 @@ def visualize_attack(model, test_loader, epsilon):
 
     # 원본과 공격 당한 이미지 시각화
     plt.figure(figsize=(8, 4))
-    for i in range(2):
-        img = images if i == 0 else perturbed_images
+    for i, img in enumerate([images, perturbed_images]):
         title = "Original" if i == 0 else f"Perturbed (Epsilon={epsilon})"
         plt.subplot(1, 2, i+1)
         plt.title(title)
@@ -132,17 +129,20 @@ model = load_trained_model(SimpleCNN)
 
 
 # FGSM 공격 강도 설정 및 테스트
-epsilons = [0, 0.01, 0.1, 0.2, 0.3]
+epsilons = [0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2]
 accuracies, losses = [], []
+
+# 테스트 로더에서 첫 번째 배치만 시각화를 위해 가져옴
+data_iter = iter(test_loader)
+sample_images, sample_labels = next(data_iter)
 
 for eps in epsilons:
     acc, loss = test_with_fgsm(model, test_loader, eps)
     accuracies.append(acc)
     losses.append(loss)
 
-    # 첫 번째 epsilon 값에 대해 시각화
-    if eps == epsilons[0]:
-        visualize_attack(model, test_loader, eps)
+    # 각 epsilon 값에 대해 시각화
+    visualize_attack(model, sample_images, sample_labels, eps)
 
 # FGSM 공격 강도에 따른 정확도 및 손실 시각화
 plt.figure(figsize=(12, 5))
