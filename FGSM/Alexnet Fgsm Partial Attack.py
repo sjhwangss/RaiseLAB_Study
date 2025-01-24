@@ -30,12 +30,14 @@ class_names = [
     "dog", "frog", "horse", "ship", "truck"
 ]
 
+
 # 학습된 가중치 로드
 def load_trained_model(model, path='alexnet_cifar10.pth'):
     model.load_state_dict(torch.load(path))
     model.eval()
     print("학습된 모델 로드 완료")
     return model
+
 
 # 부분 FGSM 공격 함수
 def partial_fgsm_attack(image, epsilon, gradient, region="full"):
@@ -66,6 +68,7 @@ def partial_fgsm_attack(image, epsilon, gradient, region="full"):
     perturbed_image += epsilon * gradient.sign() * mask
     perturbed_image = torch.clamp(perturbed_image, -1, 1)
     return perturbed_image
+
 
 # FGSM 테스트 함수
 def test_with_fgsm(model, test_loader, epsilon, region="full"):
@@ -99,8 +102,8 @@ def test_with_fgsm(model, test_loader, epsilon, region="full"):
 
     accuracy = 100 * correct / total
     avg_loss = total_loss / total
-    print(f"Region: {region}\tEpsilon: {epsilon}\tTest Accuracy: {accuracy:.2f}%\tAverage Loss: {avg_loss:.4f}")
     return accuracy, avg_loss
+
 
 # 원본과 적대적 이미지 시각화 (레이블 포함)
 def visualize_attack(model, images, labels, epsilon, region, class_names):
@@ -136,10 +139,11 @@ def visualize_attack(model, images, labels, epsilon, region, class_names):
         plt.title(title)
         img = img[0].cpu().detach().numpy()
         img = np.transpose((img * 0.5 + 0.5), (1, 2, 0))  # 정규화 해제
-        plt.imshow(img)
+        plt.imshow(np.clip(img, 0, 1))  # 이미지 클리핑 (0~1 범위)
         plt.axis("off")
     plt.tight_layout()
     plt.show()
+
 
 # 손실 함수 정의
 criterion = nn.CrossEntropyLoss()
@@ -155,20 +159,31 @@ regions = ["top_left", "top_right", "bottom_left", "bottom_right", "center", "bo
 accuracies = {region: [] for region in regions}
 losses = {region: [] for region in regions}
 
+# 테스트 및 시각화 (고정된 샘플 사용)
+# 테스트 로더에서 첫 번째 배치를 고정된 샘플로 가져옴
+data_iter = iter(test_loader)
+fixed_images, fixed_labels = next(data_iter)
+
+print("Fixed sample selected for attack visualization.")
+print(f"Label: {class_names[fixed_labels[0]]}")
+
 # 테스트 및 시각화
 for region in regions:
-    print(f"Testing region: {region}")
+    print(f"\n=== Testing Region: {region} ===")
     for eps in epsilons:
+        # FGSM 테스트
         acc, loss = test_with_fgsm(model, test_loader, eps, region)
         accuracies[region].append(acc)
         losses[region].append(loss)
 
-    # 테스트 로더에서 첫 번째 배치 시각화
-    data_iter = iter(test_loader)
-    sample_images, sample_labels = next(data_iter)
-    visualize_attack(model, sample_images, sample_labels, epsilons[-1], region, class_names)
+        # 결과 출력
+        print(f"Epsilon: {eps:.2f} | Test Accuracy: {acc:.2f}% | Average Loss: {loss:.4f}")
 
-# 결과 시각화
+        # 고정된 샘플로 시각화
+        print(f"Visualizing for Region: {region}, Epsilon: {eps:.2f}")
+        visualize_attack(model, fixed_images, fixed_labels, eps, region, class_names)
+
+# 결과 시각화 (Region별 Accuracy와 Loss 그래프)
 for region in regions:
     plt.figure(figsize=(12, 6))
     plt.plot(epsilons, accuracies[region], label="Accuracy", marker='o')
