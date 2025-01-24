@@ -37,10 +37,10 @@ def load_trained_model(model, path='resnet18_cifar10.pth'):
     print("학습된 모델 로드 완료")
     return model
 
-# 부분 FGSM 공격 함수
+# FGSM 공격 함수 (Partial 영역 포함)
 def partial_fgsm_attack(image, epsilon, gradient, region="full"):
     perturbed_image = image.clone()
-    c, h, w = image.size(1), image.size(2), image.size(3)  # 채널, 높이, 너비
+    _, h, w = image.size(1), image.size(2), image.size(3)  # 채널, 높이, 너비
 
     # 마스크 생성
     mask = torch.zeros_like(image).to(device)
@@ -99,10 +99,10 @@ def test_with_fgsm(model, test_loader, epsilon, region="full"):
 
     accuracy = 100 * correct / total
     avg_loss = total_loss / total
-    print(f"Region: {region}\tEpsilon: {epsilon}\tTest Accuracy: {accuracy:.2f}%\tAverage Loss: {avg_loss:.4f}")
+    print(f"Region: {region}\tEpsilon: {epsilon:.2f}\tTest Accuracy: {accuracy:.2f}%\tAverage Loss: {avg_loss:.4f}")
     return accuracy, avg_loss
 
-# 원본과 적대적 이미지 시각화 (레이블 포함)
+# 원본과 적대적 이미지 시각화
 def visualize_attack(model, images, labels, epsilon, region, class_names):
     model.eval()
     images, labels = images.to(device), labels.to(device)
@@ -123,7 +123,7 @@ def visualize_attack(model, images, labels, epsilon, region, class_names):
     outputs_perturbed = model(perturbed_images)
     _, predicted_perturbed = torch.max(outputs_perturbed, 1)
 
-    # 원본과 공격 당한 이미지 시각화
+    # 시각화
     plt.figure(figsize=(10, 5))
     for i, (img, pred) in enumerate(zip([images, perturbed_images], [predicted_original, predicted_perturbed])):
         title = (
@@ -131,7 +131,6 @@ def visualize_attack(model, images, labels, epsilon, region, class_names):
             if i == 0
             else f"Perturbed (Epsilon={epsilon}, Region={region}):\nPredicted: {class_names[pred[0]]}"
         )
-
         plt.subplot(1, 2, i + 1)
         plt.title(title)
         img = img[0].cpu().detach().numpy()
@@ -157,7 +156,7 @@ losses = {region: [] for region in regions}
 
 # 테스트 및 시각화
 for region in regions:
-    print(f"Testing region: {region}")
+    print(f"\nTesting region: {region}")
     for eps in epsilons:
         acc, loss = test_with_fgsm(model, test_loader, eps, region)
         accuracies[region].append(acc)
