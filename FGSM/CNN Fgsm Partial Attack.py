@@ -10,6 +10,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # 데이터셋 준비
 transform = transforms.Compose([
+    transforms.Resize((32, 32)),  # CIFAR-10의 기본 크기
     transforms.ToTensor(),
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
@@ -34,7 +35,7 @@ class SimpleCNN(nn.Module):
             nn.Linear(64 * 16 * 16, 128),
             nn.ReLU(),
             nn.Dropout(0.5),
-            nn.Linear(128, 10)
+            nn.Linear(128, 10)  # CIFAR-10은 10개의 클래스
         )
 
     def forward(self, x):
@@ -45,7 +46,7 @@ class SimpleCNN(nn.Module):
 # FGSM 공격 함수
 def fgsm_attack(image, epsilon, gradient, region="full"):
     perturbed_image = image.clone()
-    c, h, w = image.size(1), image.size(2), image.size(3)  # 채널, 높이, 너비
+    c, h, w = image.size(1), image.size(2), image.size(3)
 
     # 마스크 생성
     mask = torch.zeros_like(image).to(device)
@@ -105,7 +106,7 @@ def test_with_fgsm(model, test_loader, epsilon, region="full"):
 
     accuracy = 100 * correct / total
     avg_loss = total_loss / total
-    print(f"Region: {region} | Epsilon: {epsilon} | Accuracy: {accuracy:.2f}% | Loss: {avg_loss:.4f}")
+    print(f"Region: {region} | Epsilon: {epsilon:.2f} | Accuracy: {accuracy:.2f}% | Loss: {avg_loss:.4f}")
     return accuracy, avg_loss
 
 # 시각화 함수
@@ -162,7 +163,7 @@ class_names = [
     "dog", "frog", "horse", "ship", "truck"
 ]
 
-# 저장된 모델 불러오기
+# 모델 초기화 및 학습된 모델 불러오기
 model = load_trained_model(SimpleCNN)
 
 # FGSM 공격 수행
