@@ -10,7 +10,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # 데이터셋 준비
 transform = transforms.Compose([
-    transforms.Resize((32, 32)),  # CIFAR-10의 기본 크기
     transforms.ToTensor(),
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
@@ -35,7 +34,7 @@ class SimpleCNN(nn.Module):
             nn.Linear(64 * 16 * 16, 128),
             nn.ReLU(),
             nn.Dropout(0.5),
-            nn.Linear(128, 10)  # CIFAR-10은 10개의 클래스
+            nn.Linear(128, 10)  # CIFAR-10 클래스 수
         )
 
     def forward(self, x):
@@ -44,9 +43,9 @@ class SimpleCNN(nn.Module):
         return x
 
 # FGSM 공격 함수
-def fgsm_attack(image, epsilon, gradient, region="full"):
+def partial_fgsm_attack(image, epsilon, gradient, region="full"):
     perturbed_image = image.clone()
-    c, h, w = image.size(1), image.size(2), image.size(3)
+    _, h, w = image.size(1), image.size(2), image.size(3)
 
     # 마스크 생성
     mask = torch.zeros_like(image).to(device)
@@ -73,77 +72,78 @@ def fgsm_attack(image, epsilon, gradient, region="full"):
     perturbed_image = torch.clamp(perturbed_image, -1, 1)
     return perturbed_image
 
-# 테스트 함수
-def test_with_fgsm(model, test_loader, epsilon, region="full"):
+# FGSM 테스트 및 시각화 함수
+def test_and_visualize_fixed_sample(model, sample_images, sample_labels, epsilon, region="full"):
     model.eval()
     correct = 0
-    total = 0
     total_loss = 0.0
 
-    for images, labels in test_loader:
-        images, labels = images.to(device), labels.to(device)
-        images.requires_grad = True
-
-        # Forward pass
-        outputs = model(images)
-        loss = criterion(outputs, labels)
-
-        # Backward pass
-        model.zero_grad()
-        loss.backward()
-
-        # FGSM 공격 수행
-        gradient = images.grad.data
-        perturbed_images = fgsm_attack(images, epsilon, gradient, region)
-
-        # 적대적 샘플로 평가
-        outputs = model(perturbed_images)
-        _, predicted = torch.max(outputs, 1)
-        total += labels.size(0)
-        correct += (predicted == labels).sum().item()
-
-        total_loss += loss.item()
-
-    accuracy = 100 * correct / total
-    avg_loss = total_loss / total
-    print(f"Region: {region} | Epsilon: {epsilon:.2f} | Accuracy: {accuracy:.2f}% | Loss: {avg_loss:.4f}")
-    return accuracy, avg_loss
-
-# 시각화 함수
-def visualize_attack(model, image, label, epsilon, region, class_names):
-    model.eval()
-    image, label = image.to(device), label.to(device)
-    image.requires_grad = True
+    # requires_grad 설정
+    sample_images.requires_grad = True
 
     # 원본 예측
-    output = model(image)
-    _, pred_original = torch.max(output, 1)
+    outputs = model(sample_images)
+    loss = criterion(outputs, sample_labels)
+    total_loss += loss.item()
 
-    # 공격 수행
-    loss = criterion(output, label)
+    # Gradient 초기화 및 Backward pass
+    if sample_images.grad is not None:
+        sample_images.grad.zero_()
     model.zero_grad()
     loss.backward()
-    gradient = image.grad.data
-    perturbed_image = fgsm_attack(image, epsilon, gradient, region)
 
-    # 적대적 예측
-    output_perturbed = model(perturbed_image)
-    _, pred_perturbed = torch.max(output_perturbed, 1)
+    # FGSM 공격 수행
+    gradient = sample_images.grad.data
+    perturbed_images = partial_fgsm_attack(sample_images, epsilon, gradient, region)
+
+    # 적대적 샘플 평가
+    outputs_perturbed = model(perturbed_images)
+    _, predicted = torch.max(outputs_perturbed, 1)
+    correct = (predicted == sample_labels).sum().item()
+
+    accuracy = 100 * correct / sample_labels.size(0)
+    avg_loss = total_loss / sample_labels.size(0)
+
+    # 결과 출력
+    print(f"Region: {region}\tEpsilon: {epsilon:.2f}\tTest Accuracy: {accuracy:.2f}%\tAverage Loss: {avg_loss:.4f}")
+
+    # 시각화
+    visualize_attack(model, sample_images, sample_labels, epsilon, region, class_names)
+
+    return accuracy, avg_loss
+
+# 원본과 적대적 이미지 시각화
+def visualize_attack(model, images, labels, epsilon, region, class_names):
+    model.eval()
+
+    # FGSM 공격 수행
+    outputs = model(images)
+    _, predicted_original = torch.max(outputs, 1)
+
+    loss = criterion(outputs, labels)
+    model.zero_grad()
+    loss.backward()
+    gradient = images.grad.data
+    perturbed_images = partial_fgsm_attack(images, epsilon, gradient, region)
+
+    outputs_perturbed = model(perturbed_images)
+    _, predicted_perturbed = torch.max(outputs_perturbed, 1)
 
     # 시각화
     plt.figure(figsize=(10, 5))
-    for i, img in enumerate([image, perturbed_image]):
+    for i, (img, pred) in enumerate(zip([images, perturbed_images], [predicted_original, predicted_perturbed])):
         title = (
-            f"Original: {class_names[label.item()]}, Pred: {class_names[pred_original.item()]}"
-            if i == 0 else
-            f"Perturbed (Epsilon={epsilon}): Pred: {class_names[pred_perturbed.item()]}"
+            f"Original: {class_names[labels[0]]}\nPredicted: {class_names[pred[0]]}"
+            if i == 0
+            else f"Perturbed (Epsilon={epsilon}, Region={region}):\nPredicted: {class_names[pred[0]]}"
         )
         plt.subplot(1, 2, i + 1)
         plt.title(title)
         img = img[0].cpu().detach().numpy()
         img = np.transpose((img * 0.5 + 0.5), (1, 2, 0))
-        plt.imshow(img)
+        plt.imshow(np.clip(img, 0, 1))
         plt.axis("off")
+    plt.tight_layout()
     plt.show()
 
 # 손실 함수 정의
@@ -166,28 +166,38 @@ class_names = [
 # 모델 초기화 및 학습된 모델 불러오기
 model = load_trained_model(SimpleCNN)
 
-# FGSM 공격 수행
-regions = ["top_left", "top_right", "bottom_left", "bottom_right", "center", "border", "full"]
+# 테스트 로더에서 첫 번째 배치 고정
+data_iter = iter(test_loader)
+fixed_images, fixed_labels = next(data_iter)
+fixed_images, fixed_labels = fixed_images.to(device), fixed_labels.to(device)
+
+# FGSM 공격 설정
 epsilons = [0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2]
+regions = ["top_left", "top_right", "bottom_left", "bottom_right", "center", "border", "full"]
 
-accuracies = {region: [] for region in regions}
-losses = {region: [] for region in regions}
+# 정확도를 저장할 딕셔너리
+accuracy_dict = {region: [] for region in regions}
 
+# 고정된 샘플에 대해 테스트 및 정확도 기록
 for region in regions:
-    print(f"Testing region: {region}")
+    print(f"\n=== Testing Region: {region} ===")
     for eps in epsilons:
-        acc, loss = test_with_fgsm(model, test_loader, eps, region)
-        accuracies[region].append(acc)
-        losses[region].append(loss)
+        accuracy, avg_loss = test_and_visualize_fixed_sample(model, fixed_images, fixed_labels, eps, region)
+        accuracy_dict[region].append(accuracy)
 
-# 결과 시각화
-for region in regions:
-    plt.figure(figsize=(12, 6))
-    plt.plot(epsilons, accuracies[region], label="Accuracy", marker='o')
-    plt.plot(epsilons, losses[region], label="Loss", marker='x')
-    plt.title(f"Region: {region}")
-    plt.xlabel("Epsilon")
-    plt.ylabel("Metric")
+# 정확도 그래프 그리기
+def plot_accuracy_graph(epsilons, accuracy_dict):
+    plt.figure(figsize=(10, 6))
+    for region, accuracies in accuracy_dict.items():
+        plt.plot(epsilons, accuracies, marker='o', label=f'Region: {region}')
+    plt.title('FGSM Attack Accuracy by Region and Epsilon')
+    plt.xlabel('Epsilon')
+    plt.ylabel('Accuracy (%)')
+    plt.xticks(epsilons)
+    plt.ylim(0, 100)
+    plt.grid(True)
     plt.legend()
-    plt.grid()
     plt.show()
+
+# 정확도 그래프 출력
+plot_accuracy_graph(epsilons, accuracy_dict)
