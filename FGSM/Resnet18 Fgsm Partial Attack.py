@@ -21,7 +21,7 @@ test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=Tr
 
 # ResNet-18 CIFAR-10용으로 수정
 model = resnet18(pretrained=True)
-model.fc = nn.Linear(512, 10)  # CIFAR-10 클래스 수에 맞게 조정
+model.fc = nn.Linear(model.fc.in_features, 10)  # CIFAR-10 클래스 수에 맞게 조정
 model = model.to(device)
 
 # CIFAR-10 클래스 이름 정의
@@ -154,18 +154,24 @@ regions = ["top_left", "top_right", "bottom_left", "bottom_right", "center", "bo
 accuracies = {region: [] for region in regions}
 losses = {region: [] for region in regions}
 
+# 테스트 로더에서 한 이미지를 고정
+data_iter = iter(test_loader)
+sample_images, sample_labels = next(data_iter)
+
 # 테스트 및 시각화
 for region in regions:
-    print(f"\nTesting region: {region}")
+    print(f"\n=== Testing Region: {region} ===")
     for eps in epsilons:
+        # FGSM 테스트
         acc, loss = test_with_fgsm(model, test_loader, eps, region)
         accuracies[region].append(acc)
         losses[region].append(loss)
 
-    # 테스트 로더에서 첫 번째 배치 시각화
-    data_iter = iter(test_loader)
-    sample_images, sample_labels = next(data_iter)
-    visualize_attack(model, sample_images, sample_labels, epsilons[-1], region, class_names)
+        # 고정된 이미지로 시각화
+        print(f"Visualizing for Region: {region}, Epsilon: {eps}")
+        visualize_attack(model, sample_images, sample_labels, eps, region, class_names)
+
+
 
 # 결과 시각화
 for region in regions:
