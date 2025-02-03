@@ -163,11 +163,13 @@ def visualize_images(original, adversarial, label, epsilon, region, results, cla
     plt.axis('off')
 
     plt.tight_layout()
+    save_path = f"result_files/adv_eps{epsilon}_{region}.png"
+    plt.savefig(save_path)  # 이미지 저장
     plt.show()
 
 
 # 실행할 FGSM 공격 강도 및 부분 공격 영역
-epsilons = [0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2, 0.5, 1.0]
+epsilons = [0, 0.001, 0.002, 0.003, 0.004, 0.005,0.01, 0.02, 0.03, 0.04, 0.05, 0.1, 0.2, 0.5, 1.0]
 attack_regions = ["full", "top_left", "top_right", "bottom_left", "bottom_right", "center", "border"]
 
 # CNN이 공격 수행 → AlexNet, ResNet-18 테스트
