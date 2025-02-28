@@ -154,3 +154,5 @@ In the next chapter, we will explore **Numerical Differentiation** in detail.
 ---
 
 다음 챕터에서는 **수치 미분(Numerical Differentiation)**에 대해 다룰 것이다.
+
+
