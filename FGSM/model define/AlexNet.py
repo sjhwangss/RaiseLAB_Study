@@ -80,3 +80,4 @@ def evaluate_model(model, test_loader):
     print(f"Test Accuracy: {100 * correct / total:.2f}%")
 
 evaluate_model(model, test_loader)
+
