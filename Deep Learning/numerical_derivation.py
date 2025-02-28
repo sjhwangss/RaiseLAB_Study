@@ -15,3 +15,4 @@ def numerical_derivation(f, x):
         x[idx] = tmp_val
         it.iternext()
     return grad
+ 
